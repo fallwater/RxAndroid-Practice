@@ -10,8 +10,11 @@ import android.view.View;
 import android.widget.EditText;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import butterknife.BindView;
@@ -26,11 +29,13 @@ import io.reactivex.Observer;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Action;
+import io.reactivex.functions.BiConsumer;
 import io.reactivex.functions.BiFunction;
 import io.reactivex.functions.BooleanSupplier;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.functions.Predicate;
+import io.reactivex.observables.ConnectableObservable;
 import io.reactivex.observables.GroupedObservable;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.schedulers.Timed;
@@ -62,7 +67,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mUnbinder = ButterKnife.bind(this);
         initListener();
+        rxjava2();
+    }
 
+    private void rxjava2() {
         //创建
 //        just();
 //        range();
@@ -116,7 +124,476 @@ public class MainActivity extends AppCompatActivity {
 //        materialize();
 //        dematerialize();
 //        timeInterval();
-        timeStamp();
+//        timeStamp();
+
+        //条件操作符
+//        amb();
+//        defaultEmpty();
+//        switchIfEmpty();
+
+        //布尔操作符列表
+//        all();
+//        contains();
+//        isEmpty();
+//        sequenceEqual();
+
+        //算术和聚合
+//        concat();
+//        count();
+//        reduce();
+//        collect();
+//        toList_();
+//        toSortedList();
+//        toMap();
+
+        //连接操作符
+//        connectOrPublish();
+//        replay();
+//        refCount();
+
+        //阻塞操作符
+//        forEach();
+//        blockIterable();
+//        blockingSingle();
+//        blockingSubscribe();
+    }
+
+    private void blockingSubscribe() {
+        Observable.just(1, 2, 3)
+                .blockingSubscribe(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        Log.d(TAG, integer.toString());
+                    }
+                });
+    }
+
+    private void blockingSingle() {
+        /**
+         * 如果只发送一条数据，则把这条数据返回
+         */
+        Log.d(TAG, Observable.just("1").blockingSingle("3"));
+    }
+
+    private void blockIterable() {
+        Iterable<String> integers = Observable.just("1", "2", "3")
+                .blockingIterable();
+
+        for (String i : integers) {
+            Log.d(TAG, i);
+        }
+    }
+
+    private void forEach() {
+        Observable
+                .create(new ObservableOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<Integer> e) throws Exception {
+                        for (int i = 0; i < 5; i++) {
+                            if (i == 2) {
+                                e.onError(new Throwable("error"));
+                            }
+                            e.onNext(i);
+                        }
+                        e.onComplete();
+                    }
+                })
+//                .just(1,2,3)
+                /**
+                 * 减配版subscribe，去除onComplete,OnError
+                 */
+                .forEach(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        Log.d(TAG, integer.toString());
+                    }
+                });
+
+
+    }
+
+    private void refCount() {
+        ConnectableObservable<Long> connectableObservable = Observable.just(1L, 2L, 3L)
+                .publish();
+        connectableObservable.subscribe(new Consumer<Long>() {
+            @Override
+            public void accept(Long aLong) throws Exception {
+                Log.d(TAG, aLong.toString());
+            }
+        });
+
+        Log.d(TAG, "connect");
+        connectableObservable.connect();
+
+        /**
+         * 重新转换成Observable
+         */
+        Observable<Long> observable = connectableObservable.refCount();
+        observable.subscribe(new Consumer<Long>() {
+            @Override
+            public void accept(Long aLong) throws Exception {
+                Log.d(TAG, aLong.toString());
+            }
+        });
+    }
+
+    private void replay() {
+
+        ConnectableObservable<Long> connectableObservable = Observable.just(1L, 2L, 3L)
+                /**
+                 * 缓存数据源产生的所有数据
+                 */
+                .replay();
+        /**
+         * publish订阅者收不到消息
+         */
+//                .publish();
+        connectableObservable.delaySubscription(2, TimeUnit.SECONDS)
+                .subscribe(new Consumer<Long>() {
+                    @Override
+                    public void accept(Long aLong) throws Exception {
+                        Log.d(TAG, aLong.toString());
+                    }
+                });
+
+        connectableObservable.connect();
+    }
+
+    private void connectOrPublish() {
+        /**
+         * connectObservable只有在connect时开始发送数据
+         */
+        Observable observable = Observable.just(1L, 2L, 3L);
+        final ConnectableObservable<Long> connectableObservable = observable.publish();
+        Log.d(TAG, "subscribe");
+        connectableObservable
+//                .delay(2, TimeUnit.SECONDS)
+                .observeOn(Schedulers.newThread())
+                .subscribe(new Consumer<Long>() {
+                    @Override
+                    public void accept(Long aLong) throws Exception {
+                        Log.d(TAG, "accept:" + aLong);
+                    }
+                });
+
+        mTextView01.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                Log.d(TAG, "begin to connect");
+                connectableObservable.connect();
+            }
+        }, 2000);
+    }
+
+    private void toMap() {
+        Observable.just(1, 2, 3, 4)
+                /**
+                 * 自定义key，合成map
+                 */
+                .toMap(new Function<Integer, String>() {
+                    @Override
+                    public String apply(Integer integer) throws Exception {
+                        return "key" + integer;
+                    }
+                }).subscribe(new Consumer<Map<String, Integer>>() {
+            @Override
+            public void accept(Map<String, Integer> stringIntegerMap) throws Exception {
+                Log.d(TAG, stringIntegerMap.toString());
+            }
+        });
+    }
+
+    private void toSortedList() {
+        Observable.just("1", "10", "100", "2")
+                /**
+                 * 返回排序后的List，需要传入Comparator
+                 */
+                .toSortedList(new Comparator<String>() {
+                    @Override
+                    public int compare(String o1, String o2) {
+                        return Integer.valueOf(o1) - Integer.valueOf(o2);
+                    }
+                }).subscribe(new Consumer<List<String>>() {
+            @Override
+            public void accept(List<String> strings) throws Exception {
+                Log.d(TAG, strings.toString());
+            }
+        });
+    }
+
+    private void toList_() {
+        Observable.just(1, 2, 3, 4)
+                /**
+                 * 转换成List
+                 */
+                .toList()
+                .subscribe(new Consumer<List<Integer>>() {
+                    @Override
+                    public void accept(List<Integer> integers) throws Exception {
+                        Log.d(TAG, integers.toString());
+                    }
+                });
+    }
+
+    private void collect() {
+        Observable.just("1", "2", "3", "4")
+                /**
+                 * 插入类型并返回
+                 */
+                .collect(new Callable<String>() {
+                    @Override
+                    public String call() throws Exception {
+                        return 10 + "string";
+                    }
+                }, new BiConsumer<String, String>() {
+                    @Override
+                    public void accept(String integer, String s) throws Exception {
+                        Log.d(TAG, "call string:" + integer + ",resource:" + s);
+                    }
+                })
+                .subscribe(new Consumer<String>() {
+                    @Override
+                    public void accept(String integer) throws Exception {
+
+                        Log.d(TAG, integer.toString());
+                    }
+                });
+    }
+
+    private void reduce() {
+        Observable.just(1L, 2L, 3L)
+                /**
+                 * 先拿前两条数据做处理，数据全部处理完后，没有新的数据
+                 * 再返回给订阅者
+                 */
+                .reduce(new BiFunction<Long, Long, Long>() {
+                    @Override
+                    public Long apply(Long aLong, Long aLong2) throws Exception {
+//                        Log.d(TAG, "1:" + aLong.toString() + ",2:" + aLong2);
+                        return aLong + aLong2;
+                    }
+                }).subscribe(new Consumer<Long>() {
+            @Override
+            public void accept(Long aLong) throws Exception {
+                Log.d(TAG, aLong.toString());
+            }
+        }, new Consumer<Throwable>() {
+            @Override
+            public void accept(Throwable throwable) throws Exception {
+                Log.d(TAG, throwable.toString());
+            }
+        }, new Action() {
+            @Override
+            public void run() throws Exception {
+                Log.d(TAG, "onComplete");
+            }
+        });
+
+//        Observable.just("1","2","3","4")
+//                .reduce(new BiFunction<String, String, String>() {
+//                    @Override
+//                    public String apply(@NonNull String s, @NonNull String s2) throws Exception {
+//                        Log.e(TAG, "apply: "+s +" "+ s2);
+//
+//                        return "返回值";
+//                    }
+//                }).subscribe(new Consumer<String>() {
+//            @Override
+//            public void accept(@NonNull String s) throws Exception {
+//                Log.e(TAG, "accept: "+s);
+//
+//            }
+//        });
+    }
+
+    private void count() {
+        Observable.just(1, 2, 3)
+                /**
+                 * 事件数目
+                 */
+                .count()
+                .subscribe(new Consumer<Long>() {
+                    @Override
+                    public void accept(Long aLong) throws Exception {
+                        Log.d(TAG, aLong.toString());
+                    }
+                });
+    }
+
+    private void concat() {
+        Observable
+                /**
+                 * 直接顺序连接事件
+                 */
+                .concat(Observable.just(1, 2), Observable.just(3, 4))
+                .subscribe(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        Log.d(TAG, integer.toString());
+                    }
+                });
+
+        /**
+         * zipWith函数组合事件
+         */
+//        Observable.just(1, 2)
+//                .zipWith(Observable.just(3, 4), new BiFunction<Integer, Integer, String>() {
+//                    @Override
+//                    public String apply(Integer integer, Integer integer2) throws Exception {
+//                        return integer + integer2 + "";
+//                    }
+//                })
+//                .subscribe(new Consumer<String>() {
+//                    @Override
+//                    public void accept(String s) throws Exception {
+//                        Log.d(TAG, s);
+//                    }
+//                });
+    }
+
+    private void sequenceEqual() {
+        Observable
+                /**
+                 * 事件序列是否相等
+                 */
+                .sequenceEqual(Observable.just(1, 2), Observable.just(1, 2))
+                .subscribe(new Consumer<Boolean>() {
+                    @Override
+                    public void accept(Boolean aBoolean) throws Exception {
+                        Log.d(TAG, aBoolean.toString());
+                    }
+                });
+    }
+
+    private void isEmpty() {
+        Observable.just(1, 2, 3)
+                /**
+                 * 是否为空
+                 */
+                .isEmpty()
+                .subscribe(new Consumer<Boolean>() {
+                    @Override
+                    public void accept(Boolean aBoolean) throws Exception {
+                        Log.d(TAG, aBoolean.toString());
+                    }
+                });
+    }
+
+    private void contains() {
+        Observable.just("1", "2", "abdc")
+                /**
+                 * 是否包含该元素
+                 */
+                .contains("1")
+                .subscribe(new Consumer<Boolean>() {
+                    @Override
+                    public void accept(Boolean aBoolean) throws Exception {
+                        Log.d(TAG, aBoolean.toString());
+                    }
+                });
+    }
+
+    private void all() {
+        Observable.just(1, 2, 3)
+                /**
+                 * 条件为假时终止发送事件
+                 */
+                .all(new Predicate<Integer>() {
+                    @Override
+                    public boolean test(Integer integer) throws Exception {
+                        Log.d(TAG, integer.toString());
+                        return integer != 2;
+                    }
+                }).subscribe(new Consumer<Boolean>() {
+            @Override
+            public void accept(Boolean aBoolean) throws Exception {
+                Log.d(TAG, aBoolean.toString());
+            }
+        });
+    }
+
+    private void switchIfEmpty() {
+        Observable.create(new ObservableOnSubscribe<Integer>() {
+            @Override
+            public void subscribe(ObservableEmitter<Integer> e) throws Exception {
+                e.onComplete();
+            }
+        })
+                /**
+                 * 数据源未发射OnNext，切换至该流程
+                 */
+                .switchIfEmpty(Observable.just(1))
+                .subscribe(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        Log.d(TAG, integer.toString());
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        Log.d(TAG, "throw");
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        Log.d(TAG, "onComplete");
+                    }
+                });
+    }
+
+    private void defaultEmpty() {
+        Observable.create(new ObservableOnSubscribe<String>() {
+            @Override
+            public void subscribe(ObservableEmitter<String> e) throws Exception {
+                e.onComplete();
+            }
+        })
+                /**
+                 * onNext未发送时，发送Empty时间替换，正常走onComplete
+                 */
+                .defaultIfEmpty("empty")
+                .subscribe(new Consumer<String>() {
+                    @Override
+                    public void accept(String s) throws Exception {
+                        Log.d(TAG, s);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        Log.d(TAG, throwable.toString());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        Log.d(TAG, "onComplete");
+                    }
+                });
+    }
+
+    private void amb() {
+        Observable o1 = Observable.just(1, 2, 3)
+                .delay(1, TimeUnit.SECONDS);
+        Observable o2 = Observable.just(4, 5, 6);
+        /**
+         * 发送最先发送数据的Observable
+         */
+        Observable.ambArray(o1, o2)
+                .subscribe(new Consumer() {
+                    @Override
+                    public void accept(Object o) throws Exception {
+                        Log.d(TAG, o.toString());
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        Log.d(TAG, "onComplete");
+                    }
+                });
 
     }
 
@@ -124,13 +601,13 @@ public class MainActivity extends AppCompatActivity {
      * 加上时间戳
      */
     private void timeStamp() {
-        Observable.interval(0,1,TimeUnit.SECONDS)
+        Observable.interval(0, 1, TimeUnit.SECONDS)
                 .timestamp()
                 .subscribe(new Consumer<Timed<Long>>() {
                     @Override
                     public void accept(Timed<Long> longTimed) throws Exception {
-                        Log.d(TAG,"time:" +longTimed.time()
-                        +",value:" +longTimed.value());
+                        Log.d(TAG, "time:" + longTimed.time()
+                                + ",value:" + longTimed.value());
                     }
                 });
     }
